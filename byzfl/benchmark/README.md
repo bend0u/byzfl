@@ -268,6 +268,40 @@ loss_heatmap(path_training_results, path_to_plot)
 
 #### Heatmap of test accuracies
 
+For each selected hyperparameter configuration and attack, validation accuracy
+is averaged over all configured training and data-distribution seeds. Checkpoints
+are ranked by this mean validation accuracy, with earlier rounds first in a tie.
+The reported score is the mean test accuracy at the highest-ranked checkpoint
+with valid test measurements from **every configured seed**.
+
+If a test measurement is unavailable at that checkpoint, the reader tries the
+next checkpoint in **validation order**, until a complete test measurement is
+available. Test accuracy values never determine the ranking. For example, if
+validation accuracies are `[0.80, 0.90, 0.85]` and test accuracies are
+`[0.95, NaN, 0.70]`, the reported test accuracy is `0.70`, not `0.95`.
+
+A checkpoint also needs valid validation measurements from every configured
+seed. Missing, non-finite, or out-of-range accuracy values are unavailable;
+zero is a valid accuracy. Existing curve files retain their format and must
+contain one value per scheduled evaluation, including the final evaluation.
+An unavailable point must retain its position (for example as `NaN`); shortened
+or malformed curves are unavailable because their round alignment cannot be
+verified. A missing seed file is never replaced by another seed's curve.
+
+If no checkpoint qualifies, the score is unavailable and the corresponding
+heatmap cell is masked. Each aggregator's cell remains the minimum score over
+all configured attacks. The aggregated heatmap takes the maximum of these
+worst-attack scores over the configured aggregators. Missing attack or
+aggregator scores keep the dependent cell unavailable rather than silently
+reducing the comparison set.
+
+Hyperparameters are still selected using validation accuracy. Saved
+`better_step` files identify the validation-best round before any test-availability
+fallback; the heatmaps read the validation curves to perform the full ranking.
+The final evaluation is at `nb_steps`, even when it is not a multiple of
+`evaluation_delta`. Full test-accuracy curves and training-loss heatmaps retain
+their existing behavior.
+
 ```python
 from byzfl.benchmark.evaluate_results import test_heatmap
 

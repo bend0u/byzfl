@@ -300,6 +300,35 @@ Heatmap of training losses
 Heatmap of test accuracies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+For each selected hyperparameter configuration and attack, checkpoints are
+ranked by validation accuracy averaged over all configured training and
+data-distribution seeds. Ties use the earliest round. The score is the mean
+test accuracy at the highest-ranked checkpoint with valid validation and test
+measurements from **every configured seed**.
+
+If its test measurement is unavailable, the reader tries the next checkpoint
+in **validation order**. Test scores never determine this ranking. For example,
+validation accuracies ``[0.80, 0.90, 0.85]`` and test accuracies
+``[0.95, NaN, 0.70]`` produce a reported test accuracy of ``0.70``.
+
+Missing, non-finite, and out-of-range accuracy values are unavailable; zero
+remains valid. Curve files keep their existing format and must contain one
+value per scheduled evaluation, including the final evaluation. Missing points
+must retain their positions, for example as ``NaN``. Shortened or malformed
+curves are unavailable because round alignment cannot be verified. Missing
+seed files are never filled using another seed's measurements.
+
+If no checkpoint qualifies, the heatmap cell is unavailable (masked). The
+worst-attack reduction and the aggregated heatmap's best-aggregator reduction
+retain all configured attacks and aggregators: an unavailable required score
+makes the dependent cell unavailable.
+
+Hyperparameter selection remains validation-based. Saved ``better_step`` files
+refer to the validation-best round before any test-availability fallback; the
+heatmaps use the complete validation ranking. The final evaluation is at
+``nb_steps``, including when it is not a multiple of ``evaluation_delta``.
+Full test-accuracy curves and training-loss heatmaps are unchanged.
+
 .. code-block:: python
 
     from byzfl.benchmark.evaluate_results import test_heatmap
