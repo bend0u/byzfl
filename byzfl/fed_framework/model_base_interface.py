@@ -35,14 +35,11 @@ class ModelBaseInterface(object):
             unknown = set(encoding) - {"type", "time_steps", "encoding_params"}
             if unknown:
                 raise ValueError(f"Unknown encoding parameters: {sorted(unknown)}")
-            if "time_steps" in encoding:
-                if ("time_steps" in model_params
-                        and model_params["time_steps"] != encoding["time_steps"]):
-                    raise ValueError("Model and encoding time_steps must agree.")
-                model_params["time_steps"] = encoding["time_steps"]
+            if "time_steps" in model_params:
+                raise ValueError("Configure time_steps only in encoding, not model_params.")
             model = model_class(**model_params)
             self.encoder = TemporalEncoder(
-                time_steps=encoding.get("time_steps", getattr(model, "time_steps", 25)),
+                time_steps=encoding.get("time_steps", 25),
                 encoding_type=encoding.get("type", "constant"),
                 encoding_params=encoding.get("encoding_params"),
             )
