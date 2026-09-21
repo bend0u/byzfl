@@ -68,7 +68,7 @@ def main():
     _download_mnist(config["evaluation_and_results"]["data_folder"])
 
     print(f"Launching {NB_JOBS} SNN trainings with {NB_JOBS} parallel workers.")
-    run_benchmark(nb_jobs=NB_JOBS)
+    run_benchmark(nb_jobs=NB_JOBS, distribute_gpus=True)
 
     results_directory = config["evaluation_and_results"]["results_directory"]
     plots_directory = "./plots"
