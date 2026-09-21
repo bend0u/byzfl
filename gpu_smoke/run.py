@@ -5,6 +5,7 @@ import multiprocessing as mp
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 # Keep nine worker processes from oversubscribing the host CPU.
@@ -14,6 +15,10 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 
 import torch
 from torchvision import datasets
+
+# The repository does not provide packaging metadata, so make its root importable.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from byzfl.benchmark import aggregated_test_heatmap, run_benchmark, test_heatmap
 
