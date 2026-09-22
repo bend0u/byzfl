@@ -1,4 +1,5 @@
 import time
+from copy import deepcopy
 
 import numpy as np
 from torch import Tensor
@@ -191,7 +192,10 @@ def start_training(params):
 
     # Byzantine Client Setup
 
-    attack_parameters = params_manager.get_attack_parameters()
+    # Runtime attack setup enriches and, inside ByzantineClient, further
+    # transforms this mapping. Keep those implementation details separate
+    # from the caller-owned experiment configuration.
+    attack_parameters = deepcopy(params_manager.get_attack_parameters())
     attack_parameters["aggregator_info"] = params_manager.get_aggregator_info()
     attack_parameters["pre_agg_list"] = params_manager.get_preaggregators()
     attack_parameters["f"] = nb_byz_clients

@@ -1,6 +1,7 @@
 """Small end-to-end DSGD run for clipping and measurement integration."""
 
 import csv
+from copy import deepcopy
 import importlib
 from pathlib import Path
 import sys
@@ -72,8 +73,11 @@ def test_training_records_the_vectors_used_by_the_real_dsgd_path(tmp_path, monke
             "results_directory": str(tmp_path / "results"),
         },
     }
+    original_config = deepcopy(config)
 
     train_module.start_training(config)
+
+    assert config == original_config
 
     experiment_directories = [path for path in (tmp_path / "results").iterdir() if path.is_dir()]
     assert len(experiment_directories) == 1
