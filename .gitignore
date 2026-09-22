@@ -3,3 +3,7 @@ build
 dist
 byzfl.egg*
 setup.py
+.venv/
+__pycache__/
+*.py[cod]
+data/
