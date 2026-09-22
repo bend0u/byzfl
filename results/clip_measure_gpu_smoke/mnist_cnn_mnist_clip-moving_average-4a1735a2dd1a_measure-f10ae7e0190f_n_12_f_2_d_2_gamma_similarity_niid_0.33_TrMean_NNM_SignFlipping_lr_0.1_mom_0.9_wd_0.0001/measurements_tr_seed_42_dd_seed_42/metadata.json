@@ -1,0 +1,24 @@
+{
+    "schema_version": 1,
+    "training_seed": 42,
+    "data_distribution_seed": 42,
+    "configuration": {
+        "enabled": true,
+        "every_n_rounds": 5,
+        "honest_stages": [
+            "raw_gradient",
+            "clipped_gradient",
+            "client_update"
+        ],
+        "honest_metrics": [
+            "heterogeneity",
+            "norms",
+            "cosine_similarity"
+        ],
+        "server_metrics": [
+            "aggregate_norm",
+            "cosine_with_honest_mean"
+        ]
+    },
+    "heterogeneity_definition": "mean_i ||g_i - mean_j(g_j)||_2^2"
+}

@@ -1,0 +1,90 @@
+{
+    "benchmark_config": {
+        "device": "cuda:0",
+        "training_seed": 42,
+        "nb_training_seeds": 1,
+        "nb_workers": 12,
+        "nb_honest_clients": 10,
+        "f": 2,
+        "tolerated_f": 2,
+        "set_honest_clients_as_clients": false,
+        "size_train_set": 0.8,
+        "data_distribution_seed": 42,
+        "nb_data_distribution_seeds": 1,
+        "data_distribution": {
+            "name": "gamma_similarity_niid",
+            "distribution_parameter": 0.33
+        },
+        "training_algorithm": {
+            "name": "DSGD",
+            "parameters": {}
+        },
+        "nb_steps": 100
+    },
+    "model": {
+        "name": "cnn_mnist",
+        "dataset_name": "mnist",
+        "nb_labels": 10,
+        "loss": "NLLLoss",
+        "learning_rate": 0.1,
+        "learning_rate_decay": 1.0,
+        "milestones": []
+    },
+    "aggregator": {
+        "name": "TrMean",
+        "parameters": {
+            "f": 2
+        }
+    },
+    "pre_aggregators": [
+        {
+            "name": "NNM",
+            "parameters": {
+                "f": 2
+            }
+        }
+    ],
+    "honest_clients": {
+        "momentum": 0.9,
+        "weight_decay": 0.0001,
+        "batch_size": 25,
+        "clipping": {
+            "name": "moving_average",
+            "parameters": {
+                "window": 100,
+                "multiplier": 1.0
+            }
+        }
+    },
+    "attack": {
+        "name": "SignFlipping",
+        "parameters": {}
+    },
+    "evaluation_and_results": {
+        "evaluation_delta": 10,
+        "batch_size_evaluation": 256,
+        "evaluate_on_test": true,
+        "store_per_client_metrics": false,
+        "store_models": false,
+        "data_folder": "/localhome/bendouro/byzfl/data",
+        "results_directory": "/localhome/bendouro/byzfl/results/clip_measure_gpu_smoke"
+    },
+    "measurements": {
+        "enabled": true,
+        "every_n_rounds": 5,
+        "honest_stages": [
+            "raw_gradient",
+            "clipped_gradient",
+            "client_update"
+        ],
+        "honest_metrics": [
+            "heterogeneity",
+            "norms",
+            "cosine_similarity"
+        ],
+        "server_metrics": [
+            "aggregate_norm",
+            "cosine_with_honest_mean"
+        ]
+    }
+}

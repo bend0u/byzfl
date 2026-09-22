@@ -1,0 +1,75 @@
+{
+    "benchmark_config": {
+        "device": "cuda:0",
+        "training_seed": 42,
+        "nb_training_seeds": 1,
+        "nb_workers": 13,
+        "nb_honest_clients": 10,
+        "f": 3,
+        "tolerated_f": 3,
+        "set_honest_clients_as_clients": false,
+        "size_train_set": 0.8,
+        "data_distribution_seed": 42,
+        "nb_data_distribution_seeds": 1,
+        "data_distribution": {
+            "name": "gamma_similarity_niid",
+            "distribution_parameter": 1.0
+        },
+        "training_algorithm": {
+            "name": "DSGD",
+            "parameters": {}
+        },
+        "nb_steps": 300
+    },
+    "model": {
+        "name": "cnn_mnist_snn",
+        "dataset_name": "mnist",
+        "nb_labels": 10,
+        "loss": "ce_rate_loss",
+        "learning_rate": 0.05,
+        "learning_rate_decay": 1.0,
+        "milestones": [],
+        "is_snn": true,
+        "model_params": {
+            "beta": 0.95,
+            "surrogate_gradient": "atan",
+            "surrogate_params": {
+                "alpha": 1.2
+            },
+            "threshold": 1.0,
+            "learn_threshold": false
+        },
+        "encoding": {
+            "type": "constant",
+            "time_steps": 10,
+            "encoding_params": {}
+        },
+        "loss_params": {},
+        "accuracy_name": "accuracy_rate"
+    },
+    "aggregator": {
+        "name": "TrMean",
+        "parameters": {
+            "f": 3
+        }
+    },
+    "pre_aggregators": [],
+    "honest_clients": {
+        "momentum": 0.9,
+        "weight_decay": 0.0001,
+        "batch_size": 128
+    },
+    "attack": {
+        "name": "SignFlipping",
+        "parameters": {}
+    },
+    "evaluation_and_results": {
+        "evaluation_delta": 25,
+        "batch_size_evaluation": 128,
+        "evaluate_on_test": true,
+        "store_per_client_metrics": false,
+        "store_models": false,
+        "data_folder": "./data",
+        "results_directory": "./results"
+    }
+}

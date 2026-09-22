@@ -10,7 +10,7 @@ from byzfl import Client, Server, ByzantineClient, DataDistributor
 from byzfl.benchmark.measurements import MeasurementRecorder
 from byzfl.fed_framework.clipping import NoClipping, create_clipping_method
 from byzfl.utils.misc import set_random_seed
-from byzfl.benchmark.managers import ParamsManager, FileManager, get_model_result_name
+from byzfl.benchmark.managers import FileManager, ParamsManager, get_experiment_result_name
 from byzfl.benchmark.data import load_snn_data
 
 transforms_hflip = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.ToTensor()])
@@ -58,26 +58,7 @@ def start_training(params):
     # <----------------- File Manager  ----------------->
     file_manager = FileManager({
         "result_path": params_manager.get_results_directory(),
-        "dataset_name": params_manager.get_dataset_name(),
-        "model_name": get_model_result_name(params),
-        "nb_workers": params_manager.get_nb_workers(),
-        "nb_byz": params_manager.get_f(),
-        "declared_nb_byz": params_manager.get_tolerated_f(),
-        "data_distribution_name": params_manager.get_name_data_distribution(),
-        "distribution_parameter": (
-            None if params_manager.get_name_data_distribution() 
-            in ["iid", "extreme_niid"] 
-            else params_manager.get_parameter_data_distribution()
-        ),
-        "aggregation_name": params_manager.get_aggregator_name(),
-        "pre_aggregation_names": [
-            dict['name'] 
-            for dict in params_manager.get_preaggregators()
-        ],
-        "attack_name": params_manager.get_attack_name(),
-        "learning_rate": params_manager.get_learning_rate(),
-        "momentum": params_manager.get_honest_clients_momentum(),
-        "weight_decay": params_manager.get_honest_clients_weight_decay(),
+        "experiment_name": get_experiment_result_name(params),
     })
 
     file_manager.save_config_dict(params_manager.get_data())

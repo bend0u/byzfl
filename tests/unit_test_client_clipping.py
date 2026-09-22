@@ -15,6 +15,10 @@ from byzfl.fed_framework.clipping import (
     FirstGradientClipping,
     MovingAverageClipping,
     create_clipping_method,
+    decode_clipping_identity,
+    encode_clipping_identity,
+    get_clipping_readable_label,
+    normalize_clipping_config,
 )
 
 
@@ -103,6 +107,58 @@ def test_clipping_factory_defaults_to_identity_and_rejects_unknown_methods():
     assert result.vector is vector
     with pytest.raises(ValueError, match="Unknown clipping method"):
         create_clipping_method({"name": "missing", "parameters": {}})
+
+
+def test_clipping_identity_is_canonical_reversible_and_url_safe():
+    implicit = {"name": "moving_average", "parameters": {}}
+    explicit = {
+        "parameters": {"multiplier": 1, "window": 100},
+        "name": "moving_average",
+    }
+
+    token = encode_clipping_identity(implicit)
+
+    assert token == encode_clipping_identity(explicit)
+    assert token == "cv1.m.100.1.0"
+    assert set(token) <= set(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_."
+    )
+    assert decode_clipping_identity(token) == {
+        "name": "moving_average",
+        "parameters": {"multiplier": 1.0, "window": 100},
+    }
+    assert get_clipping_readable_label(implicit) == (
+        "clip-moving-average-w100-mult-1.0"
+    )
+
+
+def test_clipping_identity_changes_with_method_or_parameter():
+    configurations = [
+        {"name": "none"},
+        {"name": "constant", "parameters": {"max_norm": 0.5}},
+        {"name": "constant", "parameters": {"max_norm": 1.0}},
+        {"name": "first_gradient", "parameters": {"multiplier": 1.0}},
+        {
+            "name": "moving_average",
+            "parameters": {"window": 100, "multiplier": 1.0},
+        },
+    ]
+    tokens = [encode_clipping_identity(config) for config in configurations]
+    assert len(tokens) == len(set(tokens))
+
+
+def test_missing_and_explicit_none_have_one_canonical_identity():
+    assert normalize_clipping_config() == {
+        "name": "none",
+        "parameters": {},
+    }
+    assert encode_clipping_identity() == encode_clipping_identity({"name": "none"})
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+def test_clipping_rejects_nonfinite_parameters(value):
+    with pytest.raises(ValueError):
+        ConstantClipping(value)
 
 
 def test_custom_method_can_apply_a_non_norm_transformation(monkeypatch):

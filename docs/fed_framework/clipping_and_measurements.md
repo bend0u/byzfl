@@ -45,6 +45,27 @@ clipped with the threshold from the preceding round; afterward its raw norm
 updates the reference with `alpha = 1 / window`.  Thus, the current gradient
 cannot increase its own bound.
 
+To compare clipping policies while keeping every other setting and seed fixed,
+use a clipping sweep:
+
+```json
+"clipping": [
+    {"name": "none"},
+    {"name": "constant", "parameters": {"max_norm": [0.1, 0.5, 1.0]}},
+    {"name": "first_gradient", "parameters": {"multiplier": [0.5, 1.0]}},
+    {
+        "name": "moving_average",
+        "parameters": {"window": [50, 100], "multiplier": 1.0}
+    }
+]
+```
+
+Result names begin with a readable description and include a short reversible
+suffix: `cv1.n`, `cv1.c.MAX_NORM`, `cv1.f.MULTIPLIER`, or
+`cv1.m.WINDOW.MULTIPLIER`. For example,
+`clip-moving-average-w100-mult-1.0__cv1.m.100.1.0` can be decoded without
+opening the result file.
+
 Measurements are also optional:
 
 ```json

@@ -14,8 +14,8 @@ import seaborn as sns
 
 
 
-def _for_each_snn_model(function):
-    """Evaluate each concrete SNN configuration separately within a sweep."""
+def _for_each_result_identity(function):
+    """Evaluate each concrete model/clipping identity separately in a sweep."""
     @wraps(function)
     def evaluate(path_to_results, *args, **kwargs):
         try:
@@ -23,24 +23,42 @@ def _for_each_snn_model(function):
                 data = json.load(file)
         except (OSError, ValueError):
             return function(path_to_results, *args, **kwargs)
+        varying = {}
         model = data.get("model", {})
         names = model.get("name", "cnn_mnist")
         names = names if isinstance(names, list) else [names]
-        if not any(is_snn_model(get_model_class(name)) for name in names):
+        if any(is_snn_model(get_model_class(name)) for name in names):
+            fields = (
+                "name", "is_snn", "model_params", "encoding", "loss",
+                "loss_params", "accuracy_name",
+            )
+            varying["model"] = {key: model[key] for key in fields if key in model}
+
+        clipping = data.get("honest_clients", {}).get("clipping")
+        if clipping is not None:
+            varying["honest_clients"] = {"clipping": clipping}
+
+        if not varying:
             return function(path_to_results, *args, **kwargs)
         # Import at call time: benchmark imports these result readers.
         from byzfl.benchmark.benchmark import generate_all_combinations
-        fields = ("name", "is_snn", "model_params", "encoding", "loss", "loss_params", "accuracy_name")
-        varying = {key: model[key] for key in fields if key in model}
         seen = set()
         for variant in generate_all_combinations(varying, []):
             config = deepcopy(data)
-            config["model"].update(variant)
+            if "model" in variant:
+                config["model"].update(variant["model"])
+            if "honest_clients" in variant:
+                config.setdefault("honest_clients", {}).update(
+                    variant["honest_clients"]
+                )
             result_name = get_model_result_name(config)
             if result_name not in seen:
                 seen.add(result_name)
                 function(path_to_results, *args, _config=config, **kwargs)
     return evaluate
+
+
+_for_each_snn_model = _for_each_result_identity
 
 
 def custom_dict_to_str(dictionary):
@@ -104,7 +122,7 @@ def _test_accuracy_at_best_validation(
     return selected_test_accuracy
 
 
-@_for_each_snn_model
+@_for_each_result_identity
 def find_best_hyperparameters(path_to_results, *, _config=None):
     """
     Find the best hyperparameters (learning rate, momentum, weight decay) 
@@ -312,7 +330,7 @@ colors = [(0, 0.4470, 0.7410), (0.8500, 0.3250, 0.0980), (0.4660, 0.6740, 0.1880
 tab_sign = ['-', '--', '-.', ':', 'solid']
 markers = ['^','s', '<', 'o', '*']
 
-@_for_each_snn_model
+@_for_each_result_identity
 def test_accuracy_curve(path_to_results, path_to_plot, colors=colors, tab_sign=tab_sign, markers=markers, *, _config=None):
         
         try:
@@ -483,7 +501,7 @@ def test_accuracy_curve(path_to_results, path_to_plot, colors=colors, tab_sign=t
                                     plt.close()
 
 
-@_for_each_snn_model
+@_for_each_result_identity
 def loss_heatmap(path_to_results, path_to_plot, *, _config=None):
     """
     Creates a heatmap where the axis are the number of 
@@ -691,7 +709,7 @@ def loss_heatmap(path_to_results, path_to_plot, *, _config=None):
                         plt.close()
 
 
-@_for_each_snn_model
+@_for_each_result_identity
 def test_heatmap(path_to_results, path_to_plot, *, _config=None):
     """
     Creates a heatmap where the axis are the number of 
@@ -872,7 +890,7 @@ def test_heatmap(path_to_results, path_to_plot, *, _config=None):
                         plt.close()
 
 
-@_for_each_snn_model
+@_for_each_result_identity
 def aggregated_test_heatmap(path_to_results, path_to_plot, *, _config=None):
     """
     Heatmap with the aggregated info of all aggregators, 

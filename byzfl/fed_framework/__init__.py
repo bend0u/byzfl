@@ -15,6 +15,11 @@ from .clipping import (
     MovingAverageClipping,
     NoClipping,
     create_clipping_method,
+    decode_clipping_identity,
+    encode_clipping_identity,
+    get_clipping_readable_label,
+    get_clipping_result_suffix,
+    normalize_clipping_config,
     register_clipping_method,
 )
 

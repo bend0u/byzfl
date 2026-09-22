@@ -8,6 +8,7 @@ from copy import deepcopy
 import numpy as np
 import torch
 
+from byzfl.fed_framework.clipping import get_clipping_result_suffix
 from byzfl.utils.model_utils import get_model_class, is_snn_model
 
 
@@ -19,21 +20,29 @@ class FileManager:
     """
 
     def __init__(self, params=None):
-        self.files_path = (
-            f"{params['result_path']}/"
-            f"{params['dataset_name']}_{params['model_name']}_"
-            f"n_{params['nb_workers']}_"
-            f"f_{params['nb_byz']}_"
-            f"d_{params['declared_nb_byz']}_"
-            f"{params['data_distribution_name']}_"
-            f"{params['distribution_parameter']}_"
-            f"{params['aggregation_name']}_"
-            f"{'_'.join(params['pre_aggregation_names'])}_"
-            f"{params['attack_name']}_"
-            f"lr_{params['learning_rate']}_"
-            f"mom_{params['momentum']}_"
-            f"wd_{params['weight_decay']}/"
-        )
+        experiment_name = params.get("experiment_name")
+        if experiment_name is None:
+            # Compatibility with callers using the original flattened API.
+            experiment_name = (
+                f"{params['dataset_name']}_{params['model_name']}_"
+                f"n_{params['nb_workers']}_"
+                f"f_{params['nb_byz']}_"
+                f"d_{params['declared_nb_byz']}_"
+                f"{params['data_distribution_name']}_"
+                f"{params['distribution_parameter']}_"
+                f"{params['aggregation_name']}_"
+                f"{'_'.join(params['pre_aggregation_names'])}_"
+                f"{params['attack_name']}_"
+                f"lr_{params['learning_rate']}_"
+                f"mom_{params['momentum']}_"
+                f"wd_{params['weight_decay']}"
+            )
+        if len(os.fsencode(experiment_name)) > 255:
+            raise ValueError(
+                "The experiment directory name exceeds the common 255-byte "
+                "filesystem limit. Shorten the human-readable experiment fields."
+            )
+        self.files_path = os.path.join(params["result_path"], experiment_name)
         os.makedirs(self.files_path, exist_ok=True)
 
         with open(os.path.join(self.files_path, "day.txt"), "w") as file:
@@ -642,12 +651,13 @@ def get_model_result_name(params):
     clipping = manager.get_honest_clients_clipping()
     if clipping is not None and not isinstance(clipping, dict):
         raise TypeError("honest_clients.clipping must be a concrete dictionary.")
-    if clipping is not None and clipping.get("name", "none") != "none":
-        serialized = json.dumps(clipping, sort_keys=True, separators=(",", ":"), allow_nan=False)
-        digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:12]
-        method = clipping.get("name", "none")
-        safe_method = "".join(char if char.isalnum() or char in "_-" else "_" for char in str(method))
-        result_name += f"_clip-{safe_method}-{digest}"
+    clipping_suffix = None
+    if clipping is not None:
+        clipping_suffix = get_clipping_result_suffix(clipping)
+        # Keep the readable portion near the model. The authoritative,
+        # reversible token is appended after the other optional components.
+        readable_clipping = clipping_suffix.split("__", 1)[0]
+        result_name += f"_{readable_clipping}"
 
     measurements = manager.get_measurements_config()
     if measurements is not None and not isinstance(measurements, dict):
@@ -656,4 +666,33 @@ def get_model_result_name(params):
         serialized = json.dumps(measurements, sort_keys=True, separators=(",", ":"), allow_nan=False)
         digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:12]
         result_name += f"_measure-{digest}"
+    if clipping_suffix is not None:
+        result_name += f"__{clipping_suffix.split('__', 1)[1]}"
     return result_name
+
+
+def get_experiment_result_name(params):
+    """Build the complete result-directory name for one concrete experiment."""
+    manager = ParamsManager(params)
+    distribution_parameter = (
+        None
+        if manager.get_name_data_distribution() in ["iid", "extreme_niid"]
+        else manager.get_parameter_data_distribution()
+    )
+    pre_aggregation_names = [
+        pre_aggregator["name"] for pre_aggregator in manager.get_preaggregators()
+    ]
+    return (
+        f"{manager.get_dataset_name()}_{get_model_result_name(params)}_"
+        f"n_{manager.get_nb_workers()}_"
+        f"f_{manager.get_f()}_"
+        f"d_{manager.get_tolerated_f()}_"
+        f"{manager.get_name_data_distribution()}_"
+        f"{distribution_parameter}_"
+        f"{manager.get_aggregator_name()}_"
+        f"{'_'.join(pre_aggregation_names)}_"
+        f"{manager.get_attack_name()}_"
+        f"lr_{manager.get_learning_rate()}_"
+        f"mom_{manager.get_honest_clients_momentum()}_"
+        f"wd_{manager.get_honest_clients_weight_decay()}"
+    )

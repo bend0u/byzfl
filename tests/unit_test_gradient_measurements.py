@@ -1,6 +1,7 @@
 """Tests for extensible honest-gradient and server measurements."""
 
 import csv
+import json
 from pathlib import Path
 from types import SimpleNamespace
 import sys
@@ -9,13 +10,20 @@ import pytest
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from byzfl.benchmark import evaluate_results
 from byzfl.benchmark.measurements import (
     HONEST_METRICS,
     MeasurementRecorder,
     compute_honest_metrics,
     compute_server_metrics,
 )
-from byzfl.benchmark.managers import ParamsManager, get_model_result_name
+from byzfl.benchmark.benchmark import generate_all_combinations
+from byzfl.benchmark.managers import (
+    ParamsManager,
+    get_experiment_result_name,
+    get_model_result_name,
+)
+from byzfl.fed_framework.clipping import decode_clipping_identity
 from byzfl.fed_framework.clipping import ClippingResult
 from byzfl.fed_framework.server import Server
 
@@ -151,9 +159,114 @@ def test_optional_config_is_preserved_and_changes_result_identity():
         "measurements": {"enabled": True, "honest_metrics": ["heterogeneity"]},
     }
     assert get_model_result_name(plain) == "cnn_mnist"
-    assert get_model_result_name(clipping).startswith("cnn_mnist_clip-constant-")
+    clipping_name = get_model_result_name(clipping)
+    assert clipping_name.startswith("cnn_mnist_clip-constant-maxnorm-2.0")
+    token = clipping_name.rsplit("__", 1)[1]
+    assert decode_clipping_identity(token) == {
+        "name": "constant",
+        "parameters": {"max_norm": 2.0},
+    }
     assert get_model_result_name(measured) != get_model_result_name(clipping)
 
     resolved = ParamsManager(measured).get_data()
     assert resolved["honest_clients"]["clipping"] == clipping["honest_clients"]["clipping"]
     assert resolved["measurements"] == measured["measurements"]
+
+
+def test_explicit_none_gets_a_reversible_result_identity():
+    config = {
+        "model": {"name": "cnn_mnist"},
+        "honest_clients": {"clipping": {"name": "none"}},
+    }
+    result_name = get_model_result_name(config)
+    assert result_name == "cnn_mnist_clip-none__cv1.n"
+    assert decode_clipping_identity(result_name.rsplit("__", 1)[1]) == {
+        "name": "none",
+        "parameters": {},
+    }
+
+
+def test_clipping_sweep_expands_mixed_methods_and_parameters():
+    config = {
+        "honest_clients": {
+            "clipping": [
+                {"name": "none"},
+                {"name": "constant", "parameters": {"max_norm": [0.1, 0.5]}},
+                {
+                    "name": "moving_average",
+                    "parameters": {"window": [50, 100], "multiplier": 1.0},
+                },
+            ]
+        }
+    }
+    combinations = generate_all_combinations(config, [])
+    clipping_configs = [
+        combination["honest_clients"]["clipping"] for combination in combinations
+    ]
+    assert len(clipping_configs) == 5
+    assert {configuration["name"] for configuration in clipping_configs} == {
+        "none",
+        "constant",
+        "moving_average",
+    }
+
+
+def test_result_reader_expands_each_clipping_identity(tmp_path):
+    config = {
+        "model": {"name": "cnn_mnist"},
+        "honest_clients": {
+            "clipping": [
+                {"name": "none"},
+                {"name": "constant", "parameters": {"max_norm": [0.5, 1.0]}},
+            ]
+        },
+    }
+    (tmp_path / "config.json").write_text(json.dumps(config))
+    seen = []
+
+    @evaluate_results._for_each_result_identity
+    def collect(path, *, _config=None):
+        seen.append(_config["honest_clients"]["clipping"])
+
+    collect(tmp_path)
+
+    assert len(seen) == 3
+    assert [clipping["name"] for clipping in seen] == [
+        "none", "constant", "constant",
+    ]
+
+
+def test_complete_experiment_name_changes_only_with_clipping_identity():
+    base = ParamsManager({
+        "benchmark_config": {
+            "nb_workers": 2,
+            "f": 0,
+            "tolerated_f": 0,
+            "data_distribution": {"name": "iid", "distribution_parameter": 1.0},
+        },
+        "model": {
+            "name": "cnn_mnist",
+            "dataset_name": "mnist",
+            "learning_rate": 0.1,
+        },
+        "aggregator": {"name": "Average", "parameters": {}},
+        "pre_aggregators": [],
+        "honest_clients": {"momentum": 0.0, "weight_decay": 0.0},
+        "attack": {"name": "NoAttack", "parameters": {}},
+    }).get_data()
+    low = {
+        **base,
+        "honest_clients": {
+            **base["honest_clients"],
+            "clipping": {"name": "constant", "parameters": {"max_norm": 0.5}},
+        },
+    }
+    high = {
+        **base,
+        "honest_clients": {
+            **base["honest_clients"],
+            "clipping": {"name": "constant", "parameters": {"max_norm": 1.0}},
+        },
+    }
+    assert get_experiment_result_name(low) != get_experiment_result_name(high)
+    assert "_clip-constant-maxnorm-0.5_" in get_experiment_result_name(low)

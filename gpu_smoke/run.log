@@ -1,0 +1,45 @@
+nohup: ignoring input
+CUDA devices visible to PyTorch: 2
+Training device: NVIDIA A10
+Mon Sep 21 18:45:25 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.48.01              Driver Version: 590.48.01      CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A10                     On  |   00000000:2B:00.0 Off |                    0 |
+|  0%   47C    P8             22W /  150W |       3MiB /  23028MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA A10                     On  |   00000000:A2:00.0 Off |                    0 |
+|  0%   42C    P8             22W /  150W |       3MiB /  23028MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+Launching 9 SNN trainings with 9 parallel workers.
+Distributing trainings across 2 GPUs...
+Total trainings to do: 9
+Running 9 trainings in parallel...
+Training 0 done
+Training 1 done
+Training 2 done
+Training 3 done
+Training 4 done
+Training 5 done
+Training 6 done
+Training 7 done
+Training 8 done
+All trainings finished.
+Selecting Best Hyperparameters...
+Done
+Results: /localhome/bendouro/byzfl/gpu_smoke/results
+Heatmaps: /localhome/bendouro/byzfl/gpu_smoke/plots

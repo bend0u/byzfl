@@ -4,7 +4,7 @@ from multiprocessing import Pool, Value
 import os
 import copy
 
-from byzfl.benchmark.managers import get_model_result_name
+from byzfl.benchmark.managers import get_experiment_result_name
 from byzfl.benchmark.train import start_training
 from byzfl.benchmark.evaluate_results import find_best_hyperparameters
 
@@ -260,24 +260,7 @@ def eliminate_experiments_done(dict_list):
     new_dict_list = []
     for setting in dict_list:
 
-        pre_aggregation_names = [
-            agg['name'] for agg in setting["pre_aggregators"]
-        ]
-        folder_name = (
-            f"{setting['model']['dataset_name']}_"
-            f"{get_model_result_name(setting)}_"
-            f"n_{setting['benchmark_config']['nb_workers']}_"
-            f"f_{setting['benchmark_config']['f']}_"
-            f"d_{setting['benchmark_config']['tolerated_f']}_"
-            f"{setting['benchmark_config']['data_distribution']['name']}_"
-            f"{setting['benchmark_config']['data_distribution']['distribution_parameter']}_"
-            f"{setting['aggregator']['name']}_"
-            f"{'_'.join(pre_aggregation_names)}_"
-            f"{setting['attack']['name']}_"
-            f"lr_{setting['model']['learning_rate']}_"
-            f"mom_{setting['honest_clients']['momentum']}_"
-            f"wd_{setting['honest_clients']['weight_decay']}"
-        )
+        folder_name = get_experiment_result_name(setting)
 
         if folder_name in folders:
             # Check if a particular seed combination is already done
