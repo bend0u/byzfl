@@ -558,7 +558,11 @@ def run_benchmark(nb_jobs=1, distribute_gpus=False):
         json.dump(data, json_file, indent=4, separators=(',', ': '))
 
     # Generate all combination dictionaries
-    restriction_list = ["pre_aggregators", "milestones"]
+    # These lists describe one measurement setup; they are not sweep axes.
+    restriction_list = [
+        "pre_aggregators", "milestones", "honest_stages",
+        "honest_metrics", "server_metrics",
+    ]
     dict_list = generate_all_combinations(data, restriction_list)
 
     # Ensure that the key parameters are present in the dictionaries

@@ -1,10 +1,22 @@
-import torch
 import numpy as np
+import torch
+from dataclasses import dataclass
 
 from byzfl.fed_framework import ModelBaseInterface
+from byzfl.fed_framework.clipping import ClippingResult, create_clipping_method
 from byzfl.utils.conversion import flatten_dict
 from byzfl.utils.snn_accuracy import get_snn_accuracy, validate_accuracy
 from byzfl.utils.snn_loss import create_snn_loss
+
+@dataclass(frozen=True)
+class GradientUpdate:
+    """The three honest-client vectors available during one DSGD round."""
+
+    raw_gradient: torch.Tensor
+    clipped_gradient: torch.Tensor
+    client_update: torch.Tensor
+    clipping: ClippingResult
+
 
 class Client(ModelBaseInterface):
 
@@ -57,6 +69,9 @@ class Client(ModelBaseInterface):
             )),
             device=params["device"]
         )
+        # One method instance belongs to one client for the whole run.  This
+        # is how stateful methods retain values such as the first-gradient cap.
+        self.clipping = create_clipping_method(params.get("clipping"))
         self.training_dataloader = params["training_dataloader"]
         self.train_iterator = iter(self.training_dataloader)
         self.store_per_client_metrics = params["store_per_client_metrics"]
@@ -219,12 +234,29 @@ class Client(ModelBaseInterface):
         torch.Tensor
             A flat array containing the gradients with momentum applied.
         """
+        return self.prepare_gradient_update().client_update
+
+    def prepare_gradient_update(self):
+        """Clip the current raw gradient and advance client momentum once.
+
+        This method is the single state-changing transition from a completed
+        backward pass to the vector transmitted by an honest DSGD client.
+        Returning all three stages lets measurement code observe them without
+        calling the momentum update a second time.
+        """
+        raw_gradient = self.get_flat_gradients()
+        clipping = self.clipping(raw_gradient)
+        clipped_gradient = clipping.vector
+
         self.momentum_gradient.mul_(self.momentum)
-        self.momentum_gradient.add_(
-            self.get_flat_gradients(),
-            alpha=1 - self.momentum
+        self.momentum_gradient.add_(clipped_gradient, alpha=1 - self.momentum)
+
+        return GradientUpdate(
+            raw_gradient=raw_gradient,
+            clipped_gradient=clipped_gradient,
+            client_update=self.momentum_gradient,
+            clipping=clipping,
         )
-        return self.momentum_gradient
 
     def get_loss_list(self):
         """

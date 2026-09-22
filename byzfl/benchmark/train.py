@@ -6,6 +6,8 @@ from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 
 from byzfl import Client, Server, ByzantineClient, DataDistributor
+from byzfl.benchmark.measurements import MeasurementRecorder
+from byzfl.fed_framework.clipping import NoClipping, create_clipping_method
 from byzfl.utils.misc import set_random_seed
 from byzfl.benchmark.managers import ParamsManager, FileManager, get_model_result_name
 from byzfl.benchmark.data import load_snn_data
@@ -36,6 +38,15 @@ dict_datasets = {
 
 def start_training(params):
     params_manager = ParamsManager(params)
+    training_algorithm_name = params_manager.get_training_algorithm_name()
+    clipping_config = params_manager.get_honest_clients_clipping()
+    clipping_method = create_clipping_method(clipping_config)
+    measurement_recorder = MeasurementRecorder(params_manager.get_measurements_config())
+    clipping_enabled = not isinstance(clipping_method, NoClipping)
+    if training_algorithm_name != "DSGD" and clipping_enabled:
+        raise ValueError("Client-side gradient clipping currently supports only DSGD.")
+    if training_algorithm_name != "DSGD" and measurement_recorder.enabled:
+        raise ValueError("Gradient measurements currently support only DSGD.")
     model_config = params_manager.resolve_model_config()
     snn_params = {}
     if model_config["is_snn"]:
@@ -158,6 +169,7 @@ def start_training(params):
             "momentum": params_manager.get_honest_clients_momentum(),
             "nb_labels": params_manager.get_nb_labels(),
             "store_per_client_metrics": params_manager.get_store_per_client_metrics(),
+            "clipping": clipping_config,
         }) for i in range(nb_honest_clients)
     ]
 
@@ -215,8 +227,6 @@ def start_training(params):
     for client in honest_clients:
         client.set_model_state(new_model)
     
-    training_algorithm_name = params_manager.get_training_algorithm_name()
-
     if training_algorithm_name not in ["DSGD", "FedAvg"]:
         raise ValueError(f"Training algorithm {training_algorithm_name} not supported, supported algorithms are 'DSGD' and 'FedAvg'")
     
@@ -277,8 +287,11 @@ def start_training(params):
             
             train_loss_list[training_step] = train_loss_per_client.mean()
             
-            # Aggregate Honest Gradients
-            honest_gradients = [client.get_flat_gradients_with_momentum() for client in honest_clients]
+            # Each call advances one client's momentum exactly once and also
+            # exposes the raw and clipped stages to optional measurements.
+            client_updates = [client.prepare_gradient_update() for client in honest_clients]
+            honest_gradients = [update.client_update for update in client_updates]
+            measurement_recorder.record_honest(training_step, client_updates)
 
             # Deal with Label Flipping Attack
             attack_input = (
@@ -294,7 +307,10 @@ def start_training(params):
             gradients = honest_gradients + byz_vector
 
             # Update Global Model
-            server.update_model_with_gradients(gradients)
+            aggregate_gradient = server.update_model_with_gradients(gradients)
+            measurement_recorder.record_server(
+                training_step, aggregate_gradient, honest_gradients
+            )
 
         elif training_algorithm_name == "FedAvg":
 
@@ -388,6 +404,10 @@ def start_training(params):
             dd_seed,
             training_step
         )
+
+    measurement_recorder.write(
+        file_manager.get_experiment_path(), training_seed, dd_seed
+    )
     
     execution_time = end_time - start_time
 

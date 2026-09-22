@@ -6,6 +6,17 @@ from .model_base_interface import ModelBaseInterface
 
 # Import other independent utilities
 from .data_distributor import DataDistributor
+from .clipping import (
+    CLIPPING_METHODS,
+    ClippingMethod,
+    ClippingResult,
+    ConstantClipping,
+    FirstGradientClipping,
+    MovingAverageClipping,
+    NoClipping,
+    create_clipping_method,
+    register_clipping_method,
+)
 
 # Import robust aggregator before server
 from .robust_aggregator import RobustAggregator

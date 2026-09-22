@@ -181,6 +181,12 @@ class ParamsManager(object):
                 "results_directory": self.get_results_directory()
             }
         }
+        clipping = self.get_honest_clients_clipping()
+        if clipping is not None:
+            data["honest_clients"]["clipping"] = deepcopy(clipping)
+        measurements = self.get_measurements_config()
+        if measurements is not None:
+            data["measurements"] = deepcopy(measurements)
         # Preserve ANN output keys and allow unexpanded ANN model lists.
         if isinstance(self.get_model_name(), str) and self.is_snn():
             resolved = self.resolve_model_config()
@@ -413,6 +419,10 @@ class ParamsManager(object):
         read = self._read_object(path)
         return self._parameter_to_use(default, read)
 
+    def get_honest_clients_clipping(self):
+        """Return the optional client-side clipping configuration."""
+        return self._read_object(["honest_clients", "clipping"])
+
     # ----------------------------------------------------------------------
     #  Attack
     # ----------------------------------------------------------------------
@@ -479,6 +489,10 @@ class ParamsManager(object):
         path = ["evaluation_and_results", "results_directory"]
         read = self._read_object(path)
         return self._parameter_to_use(default, read)
+
+    def get_measurements_config(self):
+        """Return the optional gradient-measurement configuration."""
+        return self._read_object(["measurements"])
 
     # ----------------------------------------------------------------------
     #  SNN Properties
@@ -604,22 +618,42 @@ class ParamsManager(object):
 
 
 def get_model_result_name(params):
-    """Keep ANN paths unchanged and distinguish concrete SNN configurations."""
+    """Build the result identity for model and optional experiment features."""
     manager = ParamsManager(params)
-    if not manager.is_snn():
-        return manager.get_model_name()
-    model = manager.resolve_model_config()
-    identity = {key: model[key] for key in (
-        "name", "model_params", "encoding", "loss", "loss_params", "accuracy_name"
-    )}
-    serialized = json.dumps(identity, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:16]
-    surrogate = model["model_params"].get("surrogate_gradient")
-    if surrogate is None:
-        parameter = inspect.signature(get_model_class(model["name"])).parameters.get("surrogate_gradient")
-        surrogate = parameter.default if parameter is not None else "default"
-        if surrogate is inspect.Parameter.empty:
-            surrogate = "default"
-    # Keep custom surrogate names safe as a single path component.
-    surrogate = "".join(char if char.isalnum() or char in "_-" else "_" for char in str(surrogate))
-    return f"{model['name']}_{surrogate}_T{model['encoding']['time_steps']}_{digest}"
+    if manager.is_snn():
+        model = manager.resolve_model_config()
+        identity = {key: model[key] for key in (
+            "name", "model_params", "encoding", "loss", "loss_params", "accuracy_name"
+        )}
+        serialized = json.dumps(identity, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:16]
+        surrogate = model["model_params"].get("surrogate_gradient")
+        if surrogate is None:
+            parameter = inspect.signature(get_model_class(model["name"])).parameters.get("surrogate_gradient")
+            surrogate = parameter.default if parameter is not None else "default"
+            if surrogate is inspect.Parameter.empty:
+                surrogate = "default"
+        # Keep custom surrogate names safe as a single path component.
+        surrogate = "".join(char if char.isalnum() or char in "_-" else "_" for char in str(surrogate))
+        result_name = f"{model['name']}_{surrogate}_T{model['encoding']['time_steps']}_{digest}"
+    else:
+        result_name = manager.get_model_name()
+
+    clipping = manager.get_honest_clients_clipping()
+    if clipping is not None and not isinstance(clipping, dict):
+        raise TypeError("honest_clients.clipping must be a concrete dictionary.")
+    if clipping is not None and clipping.get("name", "none") != "none":
+        serialized = json.dumps(clipping, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:12]
+        method = clipping.get("name", "none")
+        safe_method = "".join(char if char.isalnum() or char in "_-" else "_" for char in str(method))
+        result_name += f"_clip-{safe_method}-{digest}"
+
+    measurements = manager.get_measurements_config()
+    if measurements is not None and not isinstance(measurements, dict):
+        raise TypeError("measurements must be a concrete dictionary.")
+    if measurements is not None and measurements.get("enabled", False):
+        serialized = json.dumps(measurements, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:12]
+        result_name += f"_measure-{digest}"
+    return result_name

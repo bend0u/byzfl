@@ -70,6 +70,9 @@ class Server(ModelBaseInterface):
         aggregate_gradient = self.aggregate(gradients)
         self.set_gradients(aggregate_gradient)
         self._step()
+        # Returning the exact vector used by the optimizer lets experiments
+        # measure the server decision without running the aggregator twice.
+        return aggregate_gradient
     
     def update_model_with_weights(self, weights):
         """
