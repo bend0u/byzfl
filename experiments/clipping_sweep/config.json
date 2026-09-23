@@ -1,0 +1,118 @@
+{
+    "benchmark_config": {
+        "device": "cuda",
+        "training_seed": 42,
+        "nb_training_seeds": 2,
+        "nb_honest_clients": 10,
+        "set_honest_clients_as_clients": false,
+        "f": [
+            0,
+            1,
+            2,
+            3,
+            4
+        ],
+        "size_train_set": 0.8,
+        "data_distribution_seed": 42,
+        "nb_data_distribution_seeds": 1,
+        "data_distribution": [
+            {
+                "name": "gamma_similarity_niid",
+                "distribution_parameter": [
+                    1.0,
+                    0.66,
+                    0.33,
+                    0.0
+                ]
+            }
+        ],
+        "training_algorithm": {
+            "name": "DSGD",
+            "parameters": {}
+        },
+        "nb_steps": 500
+    },
+    "model": {
+        "name": "cnn_mnist",
+        "is_snn": false,
+        "dataset_name": "mnist",
+        "nb_labels": 10,
+        "loss": "NLLLoss",
+        "accuracy_name": null,
+        "optimizer_name": "SGD",
+        "learning_rate": 0.15,
+        "learning_rate_decay": 1.0,
+        "milestones": []
+    },
+    "aggregator": [
+        {
+            "name": "GeometricMedian",
+            "parameters": {
+                "nu": 0.1,
+                "T": 3
+            }
+        },
+        {
+            "name": "CenteredClipping",
+            "parameters": {}
+        },
+        {
+            "name": "TrMean",
+            "parameters": {}
+        },
+        {
+            "name": "MultiKrum",
+            "parameters": {}
+        }
+    ],
+    "pre_aggregators": [
+        {
+            "name": "NNM",
+            "parameters": {}
+        },
+        {
+            "name": "ARC",
+            "parameters": {}
+        }
+    ],
+    "honest_clients": {
+        "momentum": 0.9,
+        "weight_decay": 0.0001,
+        "batch_size": 128,
+        "clipping": [
+            {
+                "name": "constant",
+                "parameters": {
+                    "max_norm": 10.0
+                }
+            },
+            {
+                "name": "none",
+                "parameters": {}
+            }
+        ]
+    },
+    "attack": [
+        {
+            "name": "Optimal_ALittleIsEnough",
+            "parameters": {}
+        },
+        {
+            "name": "SignFlipping",
+            "parameters": {}
+        },
+        {
+            "name": "Optimal_InnerProductManipulation",
+            "parameters": {}
+        }
+    ],
+    "evaluation_and_results": {
+        "evaluation_delta": 50,
+        "batch_size_evaluation": 128,
+        "evaluate_on_test": true,
+        "store_models": false,
+        "store_per_client_metrics": false,
+        "data_folder": "../../data",
+        "results_directory": "../../results/clipping_sweep/cnn_mnist_constant10_vs_none"
+    }
+}
