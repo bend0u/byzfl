@@ -682,6 +682,7 @@ def get_experiment_result_name(params):
     pre_aggregation_names = [
         pre_aggregator["name"] for pre_aggregator in manager.get_preaggregators()
     ]
+    attack_name = "NoAttack" if manager.get_f() == 0 else manager.get_attack_name()
     return (
         f"{manager.get_dataset_name()}_{get_model_result_name(params)}_"
         f"n_{manager.get_nb_workers()}_"
@@ -691,7 +692,7 @@ def get_experiment_result_name(params):
         f"{distribution_parameter}_"
         f"{manager.get_aggregator_name()}_"
         f"{'_'.join(pre_aggregation_names)}_"
-        f"{manager.get_attack_name()}_"
+        f"{attack_name}_"
         f"lr_{manager.get_learning_rate()}_"
         f"mom_{manager.get_honest_clients_momentum()}_"
         f"wd_{manager.get_honest_clients_weight_decay()}"

@@ -1,6 +1,7 @@
 """Tests for extensible honest-gradient and server measurements."""
 
 import csv
+from copy import deepcopy
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,7 +18,10 @@ from byzfl.benchmark.measurements import (
     compute_honest_metrics,
     compute_server_metrics,
 )
-from byzfl.benchmark.benchmark import generate_all_combinations
+from byzfl.benchmark.benchmark import (
+    canonicalize_zero_byzantine_attacks,
+    generate_all_combinations,
+)
 from byzfl.benchmark.managers import (
     ParamsManager,
     get_experiment_result_name,
@@ -209,6 +213,73 @@ def test_clipping_sweep_expands_mixed_methods_and_parameters():
         "constant",
         "moving_average",
     }
+
+
+def test_zero_byzantine_attack_sweep_collapses_to_one_no_attack_baseline():
+    config = {
+        "benchmark_config": {"f": [0, 1]},
+        "attack": [
+            {"name": "SignFlipping", "parameters": {}},
+            {"name": "Optimal_ALittleIsEnough", "parameters": {}},
+        ],
+    }
+
+    combinations = generate_all_combinations(config, [])
+    combinations = canonicalize_zero_byzantine_attacks(combinations)
+
+    zero_f = [c for c in combinations if c["benchmark_config"]["f"] == 0]
+    nonzero_f = [c for c in combinations if c["benchmark_config"]["f"] == 1]
+    assert zero_f == [{
+        "benchmark_config": {"f": 0},
+        "attack": {"name": "NoAttack", "parameters": {}},
+    }]
+    assert len(nonzero_f) == 2
+    assert {c["attack"]["name"] for c in nonzero_f} == {
+        "SignFlipping",
+        "Optimal_ALittleIsEnough",
+    }
+
+
+def test_result_readers_use_no_attack_only_at_zero_f():
+    attacks = [
+        {"name": "SignFlipping", "parameters": {}},
+        {"name": "Optimal_ALittleIsEnough", "parameters": {}},
+    ]
+
+    assert evaluate_results._attacks_for_f(attacks, 0) == [
+        {"name": "NoAttack", "parameters": {}}
+    ]
+    assert evaluate_results._attacks_for_f(attacks, 1) == attacks
+
+
+def test_zero_byzantine_result_name_is_attack_independent():
+    base = ParamsManager({
+        "benchmark_config": {
+            "nb_workers": 2,
+            "f": 0,
+            "tolerated_f": 0,
+            "data_distribution": {"name": "iid", "distribution_parameter": None},
+        },
+        "model": {"name": "cnn_mnist", "dataset_name": "mnist"},
+        "aggregator": {"name": "Average", "parameters": {}},
+        "pre_aggregators": [],
+        "honest_clients": {},
+        "attack": {"name": "SignFlipping", "parameters": {}},
+    }).get_data()
+    other_attack = deepcopy(base)
+    other_attack["attack"]["name"] = "Optimal_ALittleIsEnough"
+
+    assert get_experiment_result_name(base) == get_experiment_result_name(other_attack)
+    assert "_NoAttack_" in get_experiment_result_name(base)
+
+    nonzero = deepcopy(base)
+    nonzero["benchmark_config"].update({"f": 1, "tolerated_f": 1, "nb_workers": 3})
+    other_nonzero = deepcopy(nonzero)
+    other_nonzero["attack"]["name"] = "Optimal_ALittleIsEnough"
+
+    assert get_experiment_result_name(nonzero) != get_experiment_result_name(other_nonzero)
+    assert "_SignFlipping_" in get_experiment_result_name(nonzero)
+    assert "_Optimal_ALittleIsEnough_" in get_experiment_result_name(other_nonzero)
 
 
 def test_result_reader_expands_each_clipping_identity(tmp_path):

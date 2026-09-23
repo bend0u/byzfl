@@ -461,6 +461,31 @@ def ensure_key_parameters(dict_list):
     return dict_list
 
 
+def canonicalize_zero_byzantine_attacks(dict_list):
+    """Use one attack-independent baseline when there are no Byzantine clients.
+
+    Attack choices cannot affect a run with ``f == 0``. Replacing them with a
+    canonical ``NoAttack`` configuration and removing duplicates avoids running
+    the same baseline once per configured attack.
+    """
+    canonical_settings = []
+    seen = set()
+
+    for setting in dict_list:
+        setting = copy.deepcopy(setting)
+        if setting["benchmark_config"]["f"] == 0:
+            setting["attack"] = {"name": "NoAttack", "parameters": {}}
+
+        identity = json.dumps(
+            setting, sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
+        if identity not in seen:
+            seen.add(identity)
+            canonical_settings.append(setting)
+
+    return canonical_settings
+
+
 def ensure_optional_config_parameters(data):
 
     if "nb_honest_clients" not in data["benchmark_config"].keys():
@@ -557,6 +582,9 @@ def run_benchmark(nb_jobs=1, distribute_gpus=False):
         dict_list = set_tolerated_f_equal_to_real_f(dict_list)
     else:
         dict_list = remove_real_greater_declared(dict_list)
+
+    # At f=0 every configured attack is equivalent. Keep one explicit baseline.
+    dict_list = canonicalize_zero_byzantine_attacks(dict_list)
 
     # Set declared parameters in the dictionaries where necessary
     dict_list = set_declared_as_aggregation_parameter(dict_list)

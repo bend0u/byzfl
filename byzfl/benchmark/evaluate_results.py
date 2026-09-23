@@ -79,6 +79,13 @@ def ensure_list(value):
     return value
 
 
+def _attacks_for_f(attacks, nb_byzantine):
+    """Return the result identities that exist for a Byzantine-count value."""
+    if nb_byzantine == 0:
+        return [{"name": "NoAttack", "parameters": {}}]
+    return attacks
+
+
 def _test_accuracy_at_best_validation(
     path_to_results, config_file_name, nb_data_distribution_seeds,
     nb_training_seeds, training_seed, data_distribution_seed,
@@ -196,7 +203,8 @@ def find_best_hyperparameters(path_to_results, *, _config=None):
     # Main nested loops to explore configurations
     for nb_honest in nb_honest_clients:
         for nb_byzantine in nb_byz:
-            
+            active_attacks = _attacks_for_f(attacks, nb_byzantine)
+
             if nb_declared[0] is None:
                 nb_declared_list = [nb_byzantine]
             else:
@@ -219,14 +227,14 @@ def find_best_hyperparameters(path_to_results, *, _config=None):
 
                             # Prepare arrays to store final best hyperparams & steps
                             real_hyper_parameters = np.zeros((len(aggregators), 3))
-                            real_steps = np.zeros((len(aggregators), len(attacks)))
+                            real_steps = np.zeros((len(aggregators), len(active_attacks)))
 
                             for k, agg in enumerate(aggregators):
                                 # We'll store max accuracy for each (lr, momentum, wd) across attacks
                                 num_combinations = len(lr_list) * len(momentum_list) * len(wd_list)
-                                max_acc_config = np.zeros((num_combinations, len(attacks)))
+                                max_acc_config = np.zeros((num_combinations, len(active_attacks)))
                                 hyper_parameters = np.zeros((num_combinations, 3))
-                                steps_max_reached = np.zeros((num_combinations, len(attacks)))
+                                steps_max_reached = np.zeros((num_combinations, len(active_attacks)))
 
                                 index_combination = 0
                                 for lr in lr_list:
@@ -235,7 +243,7 @@ def find_best_hyperparameters(path_to_results, *, _config=None):
                                             # tab_acc shape: (len(attacks), nb_dd_seeds, nb_training_seeds, nb_accuracies)
                                             tab_acc = np.zeros(
                                                 (
-                                                    len(attacks),
+                                                    len(active_attacks),
                                                     nb_data_distribution_seeds,
                                                     nb_training_seeds,
                                                     nb_accuracies
@@ -243,7 +251,7 @@ def find_best_hyperparameters(path_to_results, *, _config=None):
                                             )
 
                                             # Fill tab_acc with loaded accuracy files
-                                            for i, attack in enumerate(attacks):
+                                            for i, attack in enumerate(active_attacks):
                                                 for run_dd in range(nb_data_distribution_seeds):
                                                     for run in range(nb_training_seeds):
                                                         file_name = (
@@ -262,13 +270,13 @@ def find_best_hyperparameters(path_to_results, *, _config=None):
                                                         tab_acc[i, run_dd, run] = genfromtxt(acc_path, delimiter=',')
 
                                             tab_acc = tab_acc.reshape(
-                                                len(attacks),
+                                                len(active_attacks),
                                                 nb_data_distribution_seeds * nb_training_seeds,
                                                 nb_accuracies
                                             )
                                             
                                             # Compute average accuracy across seeds, find max
-                                            for i in range(len(attacks)):
+                                            for i in range(len(active_attacks)):
                                                 avg_accuracy = np.mean(tab_acc[i], axis=0)
                                                 idx_max = np.argmax(avg_accuracy)
                                                 max_acc_config[index_combination, i] = avg_accuracy[idx_max]
@@ -316,7 +324,7 @@ def find_best_hyperparameters(path_to_results, *, _config=None):
                                 )
 
                                 # Save step at which max accuracy occurs for each attack
-                                for j, attack in enumerate(attacks):
+                                for j, attack in enumerate(active_attacks):
                                     file_name_steps = (
                                         f"{dataset_name}_{model_name}_n_{nb_nodes}_f_{nb_byzantine}_"
                                         f"d_{nb_decl}_{custom_dict_to_str(data_dist['name'])}_"
@@ -400,6 +408,7 @@ def test_accuracy_curve(path_to_results, path_to_plot, colors=colors, tab_sign=t
 
         for nb_honest in nb_honest_clients:
             for nb_byzantine in nb_byz:
+                active_attacks = _attacks_for_f(attacks, nb_byzantine)
 
                 if nb_declared[0] is None:
                     nb_declared_list = [nb_byzantine]
@@ -442,13 +451,13 @@ def test_accuracy_curve(path_to_results, path_to_plot, colors=colors, tab_sign=t
                                         wd = wd_list[0]
 
                                     tab_acc = np.zeros((
-                                        len(attacks), 
+                                        len(active_attacks),
                                         nb_data_distribution_seeds,
                                         nb_training_seeds,
                                         nb_accuracies
                                     ))
 
-                                    for i, attack in enumerate(attacks):
+                                    for i, attack in enumerate(active_attacks):
                                         for run_dd in range(nb_data_distribution_seeds):
                                             for run in range(nb_training_seeds):
                                                 file_name = (
@@ -467,19 +476,19 @@ def test_accuracy_curve(path_to_results, path_to_plot, colors=colors, tab_sign=t
                                                 tab_acc[i, run_dd, run] = genfromtxt(acc_path, delimiter=',')
 
                                     tab_acc = tab_acc.reshape(
-                                        len(attacks),
+                                        len(active_attacks),
                                         nb_data_distribution_seeds * nb_training_seeds,
                                         nb_accuracies
                                     )
                                     
-                                    err = np.zeros((len(attacks), nb_accuracies))
+                                    err = np.zeros((len(active_attacks), nb_accuracies))
                                     for i in range(len(err)):
                                         err[i] = (1.96*np.std(tab_acc[i], axis = 0))/math.sqrt(nb_training_seeds*nb_data_distribution_seeds)
                                     
                                     plt.rcParams.update({'font.size': 12})
 
                                     
-                                    for i, attack in enumerate(attacks):
+                                    for i, attack in enumerate(active_attacks):
                                         attack = attack["name"]
                                         plt.plot(np.arange(nb_accuracies)*evaluation_delta, np.mean(tab_acc[i], axis = 0), label = attack, color = colors[i], linestyle = tab_sign[i], marker = markers[i], markevery = 1)
                                         plt.fill_between(np.arange(nb_accuracies)*evaluation_delta, np.mean(tab_acc[i], axis = 0) - err[i], np.mean(tab_acc[i], axis = 0) + err[i], alpha = 0.25)
@@ -628,7 +637,7 @@ def loss_heatmap(path_to_results, path_to_plot, *, _config=None):
 
                                 
                                 lowest_loss = 0
-                                for attack in attacks:
+                                for attack in _attacks_for_f(attacks, nb_byzantine):
 
                                     config_file_name = (
                                         f"{dataset_name}_{model_name}_n_{nb_nodes}_f_{nb_byzantine}_d_{nb_decl}_"
@@ -836,7 +845,7 @@ def test_heatmap(path_to_results, path_to_plot, *, _config=None):
 
                                 
                                 worst_accuracy = np.inf
-                                for attack in attacks:
+                                for attack in _attacks_for_f(attacks, nb_byzantine):
 
                                     config_file_name = (
                                         f"{dataset_name}_{model_name}_n_{nb_nodes}_f_{nb_byzantine}_d_{nb_decl}_"
@@ -1018,7 +1027,7 @@ def aggregated_test_heatmap(path_to_results, path_to_plot, *, _config=None):
 
                                 
                                 worst_accuracy = np.inf
-                                for attack in attacks:
+                                for attack in _attacks_for_f(attacks, nb_byzantine):
                                     config_file_name = (
                                         f"{dataset_name}_"
                                         f"{model_name}_n_{nb_nodes}_f_{nb_byzantine}_d_{nb_decl}_"
