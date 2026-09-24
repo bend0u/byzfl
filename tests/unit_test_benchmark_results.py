@@ -13,6 +13,7 @@ matplotlib.use("Agg")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 results = importlib.import_module("byzfl.benchmark.evaluate_results")
 
+heatmaps = importlib.import_module("byzfl.benchmark.heatmaps")
 
 def write_curve(directory, kind, values, training_seed=3, dd_seed=7):
     path = directory / f"{kind}_accuracy_tr_seed_{training_seed}_dd_seed_{dd_seed}.txt"
@@ -143,3 +144,84 @@ def test_heatmaps_use_test_accuracy_at_best_validation(
     getattr(results, plot_function)(str(benchmark_results), str(plot_directory))
 
     np.testing.assert_allclose([table.item() for table in plotted], expected)
+
+
+@pytest.mark.parametrize("view,expected", [
+    ("best", [0.5]),
+    ("per-aggregator", [0.4, 0.5]),
+    ("per-attack", [0.6, 0.7]),
+])
+def test_configurable_heatmap_views_apply_the_expected_reduction(
+    benchmark_results, monkeypatch, view, expected
+):
+    plotted = []
+    original_heatmap = heatmaps.sns.heatmap
+
+    def capture(table, **kwargs):
+        plotted.append(np.asarray(table).copy())
+        return original_heatmap(table, **kwargs)
+
+    monkeypatch.setattr(heatmaps.sns, "heatmap", capture)
+    heatmaps.generate_heatmaps(
+        benchmark_results,
+        benchmark_results / f"plots_{view}",
+        views=(view,),
+    )
+
+    np.testing.assert_allclose([table.item() for table in plotted], expected)
+
+
+def test_generate_heatmaps_separates_product_folders(benchmark_results):
+    output = benchmark_results / "products"
+    generated = heatmaps.generate_heatmaps(benchmark_results, output)
+
+    assert len(generated) == 5
+    assert len(list(output.glob("*.pdf"))) == 1
+    assert len(list((output / "per_aggregator").glob("*.pdf"))) == 2
+    assert len(list((output / "per_attack").glob("*.pdf"))) == 2
+
+
+def test_compact_caption_defaults_and_selectable_fields():
+    config = {
+        "model": {"name": "cnn_mnist"},
+        "honest_clients": {
+            "clipping": {"name": "constant", "parameters": {"max_norm": 10}}
+        },
+    }
+    pre_aggregators = [{"name": "NNM"}, {"name": "ARC"}]
+    aggregators = [{"name": "TrMean"}]
+    attacks = [
+        {"name": "Optimal_ALittleIsEnough"},
+        {"name": "SignFlipping"},
+        {"name": "Optimal_InnerProductManipulation"},
+    ]
+
+    assert heatmaps._caption_text(
+        config,
+        pre_aggregators,
+        aggregators,
+        attacks,
+        heatmaps.CAPTION_FIELDS,
+    ) == (
+        "CNN-MNIST | constant clip (10) | NNM → ARC → TrMean | "
+        "ALIE, SignFlip, IPM"
+    )
+    assert heatmaps._caption_text(
+        config,
+        pre_aggregators,
+        aggregators,
+        attacks,
+        ("model", "clipping"),
+    ) == "CNN-MNIST | constant clip (10)"
+
+
+def test_caption_mode_uses_only_the_captioned_default_folder(benchmark_results):
+    generated = heatmaps.generate_heatmaps(
+        benchmark_results,
+        views=("best",),
+        caption=True,
+    )
+
+    assert len(generated) == 1
+    assert generated[0].parent == benchmark_results / "heatmaps_captioned"
+    assert not (benchmark_results / "heatmaps").exists()

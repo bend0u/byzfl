@@ -284,6 +284,20 @@ with the highest mean validation accuracy; they do not select the maximum test
 accuracy. Ties select the earliest checkpoint. Missing or invalid result files
 raise an error, and another checkpoint is not selected.
 
+The reusable CLI generates the robust-best, per-aggregator, and per-attack
+views for any benchmark result directory:
+
+```bash
+python -m byzfl.benchmark.heatmap_cli \
+  --results ./results/my_experiment \
+  --views best per-aggregator per-attack \
+  --caption
+```
+
+Without `--caption`, outputs are written below `heatmaps/`. With `--caption`,
+only captioned outputs are written below `heatmaps_captioned/`. The equivalent
+Python API is `from byzfl.benchmark import generate_heatmaps`.
+
 ```python
 from byzfl.benchmark.evaluate_results import test_heatmap
 
